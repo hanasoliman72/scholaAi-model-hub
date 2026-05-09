@@ -52,48 +52,6 @@ def transcribe_audio(file_path: str) -> str:
     print("✅ Transcription complete!")
     return transcription
 
-
-# def transcribe_large_file(file_path: str, client: Groq) -> str:
-#     """
-#     Splits large audio files into 10-minute chunks
-#     and transcribes each one separately.
-#     Requires: pip install pydub
-#     """
-#     try:
-#         from pydub import AudioSegment
-#     except ImportError:
-#         print("Installing pydub...")
-#         os.system("pip install pydub")
-#         from pydub import AudioSegment
-
-#     print("✂️ Loading and splitting audio file...")
-#     audio = AudioSegment.from_file(file_path)
-
-#     chunk_duration = 10 * 60 * 1000  # 10 minutes in milliseconds
-#     chunks = [audio[i:i+chunk_duration] for i in range(0, len(audio), chunk_duration)]
-#     print(f"📦 Split into {len(chunks)} chunks")
-
-#     full_transcript = []
-
-#     for i, chunk in enumerate(chunks):
-#         print(f"🎙️ Transcribing chunk {i+1}/{len(chunks)}...")
-#         chunk_path = f"temp_chunk_{i}.mp3"
-#         chunk.export(chunk_path, format="mp3")
-
-#         with open(chunk_path, "rb") as f:
-#             result = client.audio.transcriptions.create(
-#                 model="whisper-large-v3",
-#                 file=f,
-#                 language="ar",
-#                 response_format="text"
-#             )
-#         full_transcript.append(result)
-#         os.remove(chunk_path)  # Clean up temp file
-
-#     print("✅ All chunks transcribed!")
-#     return " ".join(full_transcript)
-
-
 def transcribe_large_file(file_path: str, client: Groq) -> str:
     from pydub import AudioSegment
 

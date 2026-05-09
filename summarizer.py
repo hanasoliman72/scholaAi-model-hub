@@ -4,58 +4,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# def summarize_session(transcript: str) -> str:
-#     """
-#     Takes an Arabic transcript,
-#     returns a full structured summary report in Arabic.
-#     """
-#     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-#     print("🤖 Sending transcript to Groq for summarization...")
-
-#     # If transcript is very long, trim it to avoid token limits
-#     max_chars = 12000
-#     if len(transcript) > max_chars:
-#         print(f"⚠️ Transcript is long, trimming to {max_chars} characters...")
-#         transcript = transcript[:max_chars]
-
-#     prompt = f"""
-# أنت مساعد متخصص في تلخيص الجلسات والاجتماعات.
-# الجلسة التالية كانت باللغة العربية المصرية.
-
-# قم بإنشاء تقرير منظم يحتوي على:
-
-# 1. **ملخص عام** — فقرة قصيرة تصف الجلسة بشكل عام
-# 2. **المواضيع الرئيسية التي نوقشت** — نقاط واضحة لكل موضوع
-# 3. **أبرز النقاط والأفكار** — أهم ما قيل في الجلسة
-# 4. **القرارات أو الإجراءات المطلوبة** (إن وجدت)
-# 5. **خلاصة ختامية** — جملة أو جملتين تلخصان الجلسة
-
-# النص المراد تلخيصه:
-# {transcript}
-
-# اكتب التقرير باللغة العربية الفصحى بشكل واضح ومنظم.
-# """
-
-#     response = client.chat.completions.create(
-#         model="llama-3.3-70b-versatile",
-#         messages=[
-#             {
-#                 "role": "system",
-#                 "content": "أنت خبير في تحليل وتلخيص الاجتماعات والجلسات التعليمية والمهنية."
-#             },
-#             {
-#                 "role": "user",
-#                 "content": prompt
-#             }
-#         ],
-#         temperature=0.3,
-#         max_tokens=2048
-#     )
-
-#     return response.choices[0].message.content
-
-
 def summarize_session(transcript: str) -> str:
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
