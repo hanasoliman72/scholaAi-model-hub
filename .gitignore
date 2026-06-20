@@ -1,3 +1,38 @@
-.env
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Jupyter / notebooks cache
+.ipynb_checkpoints/
+
+# Environment variables / secrets
+.env
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+focus_log.csv
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+
+# Model checkpoints
+*.pt
+*.pth
+*.h5
+*.ckpt
