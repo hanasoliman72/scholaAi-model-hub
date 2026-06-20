@@ -18,3 +18,5 @@ lightdsa>=0.0.3
 python-dotenv>=1.0.1
 mediapipe
 deepface
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
