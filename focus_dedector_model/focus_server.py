@@ -28,8 +28,8 @@ from pydantic import BaseModel
 
 BACKEND_URL = "http://localhost:5254"   # Change to deployed .NET API URL
 REPORT_INTERVAL_SECONDS = 30           # How often to push score to backend DB
-DISTRACTION_THRESHOLD = 70             # Score below this = distracted
-CONSECUTIVE_DISTRACTED_LIMIT = 2       # N consecutive bad checks before alerting
+DISTRACTION_THRESHOLD = 50             # Score below this = distracted
+CONSECUTIVE_DISTRACTED_LIMIT = 1       # Alert on first bad check (no delay)
 DEEPFACE_SKIP_FRAMES = 15              # Run emotion model every N frames
 FOCUS_HISTORY_LENGTH = 15              # Smoothing window size
 
@@ -297,8 +297,8 @@ app = FastAPI(title="ScholaAi Focus Agent", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://scholaai.com"],
-    allow_credentials=True,
+    allow_origins=["*"],          # Allow any origin (LAN, localhost, production)
+    allow_credentials=False,      # Must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -423,3 +423,13 @@ def live():
             "focus_score": _state["focus_score"],
             "running":     _state["running"],
         }
+
+
+# ─────────────────────────── Entry Point ─────────────────────────────────────
+# Run directly:  python focus_server.py
+# This always binds to 0.0.0.0 so the server is reachable over LAN.
+# (uvicorn defaults to 127.0.0.1 which is localhost-only and blocks LAN access)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("focus_server:app", host="0.0.0.0", port=8000, reload=True)
