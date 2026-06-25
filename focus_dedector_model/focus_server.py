@@ -7,6 +7,7 @@ real-time distraction alerts via the backend's SignalR hub.
 Run: uvicorn focus_server:app --port 8000 --reload
 """
 
+import base64
 import threading
 import time
 import traceback
@@ -27,8 +28,8 @@ from pydantic import BaseModel
 
 BACKEND_URL = "http://localhost:5254"   # Change to deployed .NET API URL
 REPORT_INTERVAL_SECONDS = 30           # How often to push score to backend DB
-DISTRACTION_THRESHOLD = 70             # Score below this = distracted
-CONSECUTIVE_DISTRACTED_LIMIT = 2       # N consecutive bad checks before alerting
+DISTRACTION_THRESHOLD = 50             # Score below this = distracted
+CONSECUTIVE_DISTRACTED_LIMIT = 1       # Alert on first bad check (no delay)
 DEEPFACE_SKIP_FRAMES = 15              # Run emotion model every N frames
 FOCUS_HISTORY_LENGTH = 15              # Smoothing window size
 
@@ -45,6 +46,7 @@ _state = {
     "final_score": None,         # set when stopped
     "distraction_count": 0,      # consecutive distracted intervals
     "thread": None,
+    "latest_frame": None,        # raw frame array uploaded from frontend
 }
 
 # ─────────────────────────── Focus Model Logic ───────────────────────────────
@@ -183,17 +185,10 @@ def _notify_distraction_via_backend(session_id: int, room_id: str, token: str, r
 def _focus_loop(session_id: int, room_id: str, token: str):
     """
     Main analysis loop. Runs until _state["running"] is False.
-    Opens the webcam, samples frames, tracks focus, and reports to backend.
+    Consumes frames uploaded by the client frontend, tracks focus, and reports to backend.
     """
     print("[FocusServer] [START] Starting focus analysis loop...")
     face_mesh = _build_face_landmarker()
-    cap = cv2.VideoCapture(0)
-
-    if not cap.isOpened():
-        print("[FocusServer] [ERROR] Cannot open webcam")
-        with _lock:
-            _state["running"] = False
-        return
 
     frame_count      = 0
     focus_history    = []
@@ -220,11 +215,12 @@ def _focus_loop(session_id: int, room_id: str, token: str):
             with _lock:
                 if not _state["running"]:
                     break
+                frame = _state.get("latest_frame")
+                # Clear to avoid reprocessing the same frame
+                _state["latest_frame"] = None
 
-            ret, frame = cap.read()
-            if not ret:
-                print("[FocusServer] [WARN] Webcam read failed, retrying...")
-                time.sleep(0.1)
+            if frame is None:
+                time.sleep(0.05)
                 continue
 
             frame_count += 1
@@ -269,14 +265,13 @@ def _focus_loop(session_id: int, room_id: str, token: str):
                 else:
                     distraction_count = 0
 
-            # Small sleep to avoid CPU spinning — camera runs at ~30fps
+            # Small sleep to avoid CPU spinning
             time.sleep(0.033)
 
     except Exception as e:
         print(f"[FocusServer] [ERROR] Loop error: {e}")
         traceback.print_exc()
     finally:
-        cap.release()
         final = int(sum(all_scores) / len(all_scores)) if all_scores else 0
         with _lock:
             _state["final_score"] = final
@@ -302,8 +297,8 @@ app = FastAPI(title="ScholaAi Focus Agent", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://scholaai.com"],
-    allow_credentials=True,
+    allow_origins=["*"],          # Allow any origin (LAN, localhost, production)
+    allow_credentials=False,      # Must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -315,6 +310,7 @@ class StartRequest(BaseModel):
     session_id: int
     room_id: str
     token: str          # Student's JWT bearer token
+    backend_url: str = None
 
 
 class StopResponse(BaseModel):
@@ -322,7 +318,38 @@ class StopResponse(BaseModel):
     message: str
 
 
+class FrameRequest(BaseModel):
+    image: str          # base64 encoded image data (data:image/jpeg;base64,...)
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/focus/frame")
+def upload_frame(req: FrameRequest):
+    """Receive a base64 encoded frame from the student client."""
+    with _lock:
+        if not _state["running"]:
+            return {"success": False, "message": "Focus agent is not running"}
+
+        try:
+            # The base64 string might start with "data:image/jpeg;base64,"
+            header = "data:image/jpeg;base64,"
+            img_data = req.image
+            if img_data.startswith(header):
+                img_data = img_data[len(header):]
+
+            # Decode the base64 string to a numpy array for OpenCV
+            decoded = base64.b64decode(img_data)
+            np_arr = np.frombuffer(decoded, dtype=np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            if frame is not None:
+                _state["latest_frame"] = frame
+                return {"success": True}
+            else:
+                return {"success": False, "message": "Failed to decode frame"}
+        except Exception as e:
+            return {"success": False, "message": f"Error decoding frame: {e}"}
 
 @app.get("/focus/status")
 def status():
@@ -338,6 +365,7 @@ def status():
 @app.post("/focus/start")
 def start(req: StartRequest):
     """Start the focus analysis loop for a session."""
+    global BACKEND_URL
     with _lock:
         if _state["running"]:
             return {"success": False, "message": "Focus agent is already running"}
@@ -348,6 +376,8 @@ def start(req: StartRequest):
         _state["token"]      = req.token
         _state["focus_score"]= 100
         _state["final_score"]= None
+        if req.backend_url:
+            BACKEND_URL = req.backend_url
 
     thread = threading.Thread(
         target=_focus_loop,
@@ -359,7 +389,7 @@ def start(req: StartRequest):
     with _lock:
         _state["thread"] = thread
 
-    print(f"[FocusServer] [INFO] Started for session {req.session_id}, room {req.room_id}")
+    print(f"[FocusServer] [INFO] Started for session {req.session_id}, room {req.room_id} reporting to backend {BACKEND_URL}")
     return {"success": True, "message": "Focus agent started"}
 
 
@@ -393,3 +423,13 @@ def live():
             "focus_score": _state["focus_score"],
             "running":     _state["running"],
         }
+
+
+# ─────────────────────────── Entry Point ─────────────────────────────────────
+# Run directly:  python focus_server.py
+# This always binds to 0.0.0.0 so the server is reachable over LAN.
+# (uvicorn defaults to 127.0.0.1 which is localhost-only and blocks LAN access)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("focus_server:app", host="0.0.0.0", port=8000, reload=True)
