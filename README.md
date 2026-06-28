@@ -188,9 +188,3 @@ The summary is automatically saved to the session record in the .NET backend dat
 | Frontend | `ScholaAi-Front-End` | React app — sends webcam frames, triggers summarization |
 | Backend API | `ScholaAi` (.NET) | Receives focus scores, stores summaries, triggers SignalR alerts |
 | Session Server | `ScholaAi-mediasoup-server` | WebRTC media routing for live sessions |
-
----
-
-## 📄 License
-
-MIT
